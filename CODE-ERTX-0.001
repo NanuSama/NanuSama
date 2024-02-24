@@ -1,0 +1,143 @@
+ #include <Wire.h>
+  #include "TinyGPS++.h"
+  #include "SoftwareSerial.h"
+  #include "TimeLib.h"
+  char divisor = ',';
+//Gyro
+  int hora, hor, di;
+  float lat1, lat2, lon1, lon2, vel, lev;
+//IMU
+  long accX, accY, accZ;
+  float gFX, gFY, gFZ;
+  long gyroX, gyroY, gyroZ;
+  float rotX, rotY, rotZ;
+//Gyro
+  SoftwareSerial serial_connection(5,6); //TX RX 
+  TinyGPSPlus gps; //GPS al procesador de datos NMEA
+  int rel=500;
+
+void setup() {
+  Serial.begin(9600);
+  Wire.begin();
+  setupIMU();
+  serial_connection.begin(9600);
+}
+
+void loop() {
+  // main
+  while(serial_connection.available()){ gps.encode(serial_connection.read());}
+  RegistrosdeAcc();
+  RegistrosdeGyro();
+  gpsee();
+  printData();
+}
+
+void gpsee(){
+  hor = gps.time.hour()-4;
+  if(hor==-4){hora =20; di= gps.date.day()-1;}
+     else if (hor==-3){hora = 21; di= gps.date.day()-1;}
+     else if (hor==-2){hora = 22; di= gps.date.day()-1;}
+     else if (hor==-1){hora = 24; di= gps.date.day()-1;}
+     else {hora = gps.time.hour(); di= gps.date.day();}
+  
+  if(gps.location.isUpdated()){
+    lat1 = gps.location.lat();
+    lon1 = gps.location.lng();
+    float nextstop =
+    (float)TinyGPSPlus::distanceBetween(
+      lat1, lon1,
+      lat2, lon2);
+      //Serial.print(nextstop, gps.location.isValid());
+      lev=nextstop;
+      vel=lev/(rel/0.00014167);
+    delay(rel);
+    lat2 = gps.location.lat();
+    lon2 = gps.location.lng();}
+}
+
+void setupIMU(){
+  Wire.beginTransmission(0b1101000);
+  Wire.write(0x6B);
+  Wire.write(0b00000000);
+  Wire.endTransmission();  
+  Wire.beginTransmission(0b1101000);
+  Wire.write(0x1B);
+  Wire.write(0x00000000);
+  Wire.endTransmission(); 
+  Wire.beginTransmission(0b1101000);
+  Wire.write(0x1C); //Configuracion de Acccelerometro 
+  Wire.write(0b00000000); 
+  Wire.endTransmission(); 
+}
+
+void RegistrosdeAcc() {
+  Wire.beginTransmission(0b1101000);
+  Wire.write(0x3B);
+  Wire.endTransmission();
+  Wire.requestFrom(0b1101000,6); 
+  while(Wire.available() < 6);
+  accX = Wire.read()<<8|Wire.read(); 
+  accY = Wire.read()<<8|Wire.read(); 
+  accZ = Wire.read()<<8|Wire.read(); 
+  DatosdeProceAcc();
+}
+
+void DatosdeProceAcc(){
+  gFX = accX / 16384.0;
+  gFY = accY / 16384.0; 
+  gFZ = accZ / 16384.0;
+}
+
+void RegistrosdeGyro() {
+  Wire.beginTransmission(0b1101000); 
+  Wire.write(0x43); 
+  Wire.endTransmission();
+  Wire.requestFrom(0b1101000,6); 
+  while(Wire.available() < 6);
+  gyroX = Wire.read()<<8|Wire.read(); 
+  gyroY = Wire.read()<<8|Wire.read(); 
+  gyroZ = Wire.read()<<8|Wire.read();
+  DatosdeProceGyro();
+}
+
+void DatosdeProceGyro() {
+  rotX = gyroX / 131.0;
+  rotY = gyroY / 131.0; 
+  rotZ = gyroZ / 131.0;
+}
+
+void printData() {
+  //IMU
+  Serial.print(rotX);
+  Serial.print(divisor);
+  Serial.print(rotY);
+  Serial.print(divisor);
+  Serial.print(rotZ);
+  Serial.print(divisor);
+  Serial.print(gFX);
+  Serial.print(divisor);
+  Serial.print(gFY);
+  Serial.print(divisor);
+  Serial.print(gFZ);
+  //Gyro
+  Serial.print(divisor);
+  Serial.print(gps.satellites.value());
+  Serial.print(divisor);
+  Serial.print(gps.location.lat(), 13);
+  Serial.print(divisor);
+  Serial.print(gps.location.lng(), 13);
+  Serial.print(divisor);
+  Serial.print(vel, 5);
+  Serial.print(divisor);
+  if (gps.date.isValid()){Serial.print(di);}
+  Serial.print(divisor);
+  if (gps.date.isValid()){Serial.print(gps.date.month());}
+  Serial.print(divisor);
+  if (gps.date.isValid()){Serial.print(gps.date.year());}
+  Serial.print(divisor);
+  if (gps.time.isValid()){if (hora < 10) Serial.print(F("0"));Serial.print(hora);}
+  Serial.print(divisor);
+  if (gps.time.isValid()){if (gps.time.minute() < 10) Serial.print(F("0"));Serial.print(gps.time.minute());}
+  Serial.print(divisor);
+  if (gps.time.isValid()){if (gps.time.second() < 10) Serial.print(F("0"));Serial.println(gps.time.second());}
+}
